@@ -1,0 +1,40 @@
+curl 'https://agub819.918bug.com/hall/api/member/register' \
+  -H 'accept: application/json, text/plain, */*' \
+  -H 'accept-language: pt' \
+  -H 'appsystem: Android 6.0' \
+  -H 'appversion: v7.1.35' \
+  -H 'browserfingerid;' \
+  -H 'browsertype: Mobile Chrome v144.0.0.0' \
+  -H 'clienttimezone: -3' \
+  -H 'content-type: text/plain' \
+  -H 'currency: BRL' \
+  -H 'device: ec15a0c6-5e2a-49fe-b840-844c9bb33bbd' \
+  -H 'devicebrand: LG' \
+  -H 'devicemodel: LG Nexus 5' \
+  -H 'devicetype: 3' \
+  -H 'domain: d3rv2u8eer1b5r.cloudfront.net' \
+  -H 'language: pt' \
+  -H 'operatingsystem: Android' \
+  -H 'origin: https://d3rv2u8eer1b5r.cloudfront.net' \
+  -H 'physicaldevicemodel: LG Nexus 5' \
+  -H 'platformtype: 5' \
+  -H 'priority: u=1, i' \
+  -H 'referer: https://d3rv2u8eer1b5r.cloudfront.net/' \
+  -H 'sec-ch-ua: "Not(A:Brand";v="8", "Chromium";v="144", "Google Chrome";v="144"' \
+  -H 'sec-ch-ua-mobile: ?1' \
+  -H 'sec-ch-ua-platform: "Android"' \
+  -H 'sec-fetch-dest: empty' \
+  -H 'sec-fetch-mode: cors' \
+  -H 'sec-fetch-site: cross-site' \
+  -H 'sitecode: 10169' \
+  -H 'timestamp: 1770463419' \
+  -H 'token: b2e3d672-9d88-47a7-81b4-9d7ffc62054f' \
+  -H 'user-agent: Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Mobile Safari/537.36' \
+  -H 'webauthndomain: d3rv2u8eer1b5r.cloudfront.net' \
+  -H 'x-custom-referer: https://d3rv2u8eer1b5r.cloudfront.net/?id=132851630' \
+  -H 'x-data-mode: chipher' \
+  -H 'x-device: 2-1' \
+  -H 'x-object-id: {"uid":"","browserLanguage":"pt-BR","init":{"device":"ec15a0c6-5e2a-49fe-b840-844c9bb33bbd","created":1770463449510,"version":1770430164000}}' \
+  -H 'x-request-id: 9af4832b-76d8-4d2d-bb53-f5ee8b52fe0a' \
+  -H 'x-version: 7.1.35' \
+  --data-raw 'DsNQs7JB616U/y0wposj5hoOYSN0BPVweO5U7A09aB6cHUQWNL1HykrL/cuwWcbn5tK3BkavtxJ/j2VIC6q+HovZLrd+jbIWRaKTjpjDtIfluHRbH8AgMss/snbarPH2DKTAzLj4xeMr/jmXm/tEHkksJxCJyTYTFyUWSWyVZKex19oc2I9xM0f4ljhPBGzCwO48wPNabSTZe6Dom6a2IJ9afsRUucTLIH1LdM8M4zPYUjeoAuM5KLGIh97yko9cz1k4b71/4iWAEA7Yi4wO7R7lpFT5iTdz2wwCPPONzrCHauY26m8w/PyrgmXdnUW5J1wG5dUdh+Wjwa8thkLXSkHS/VFzB+ixgHMFc2897Ih0s67RXTiNWsgqNaTz3GKg3cLJvXYVDW9DrYh/PIhH1KgmnmDI1oQhrnbPAwijQ7P65zA4M6uFa7oJips3MZZLnUXG7TXXmUmwI2K9TKKgOCxFJmEK984swN/UuVx3Gidkb/MvpAXKuuWakf6KYMMj+Rjtfwek0wjOiKN4Goht+iicwqMkwiTrXTKhIxf3fPiJUyKbPqEzcYTu0fd+23EEl9GjA810B/LXbA4E5ocAPWhpHROxwmD5pCbfugPAbC8DdfSpDADIKWwgpErQwEMf6zQos1w/jLa8g1MgApvfcKeXNxtxnlrAbF2GcR7kpZH4BLpgdLKdcZDjg7p0EMe30AGcuG1Yo8+PBpbEL5ic/HGFsprehSKisHgWW75unHHVR40E/MPIfxH6goePTyHZkdhwy4pbdikrWpr381r7Qa4jUJxGf2nD3eNbky4YdS35S7d4/eYaUyCJ849+r1rl1sAmf0LYFCL95pMsO0anqCkBE8T+Glr+AdebGtuBgoPvtzOqz5suFHGUvyBSPH9UlB3b9CYTxKo7IfT8CmkD/LSzhYzRV/sQvYBvrg9jRZFUFFgPunKkBFhW3atiUZDtvjFko7NVnY0tBYmQ2GNzPAY1FfAHDnHvCOF7znyIOdRRrV4Df1aKfPeHiB+hwv48fj0SUBpSTcm0g3+FSPx+MA3LjKEGalb47teubBbKvNL7opl2/7r/UwHdf5ri0K405RwOBLQfqk2oAx956glLcYEBVAWi4uIY1WOwnjOqboQUEYP34tKaY/O7a2EEhzpEbAfVvpkm6nkJkZDZ2+7R+mW0qeW3MbZmPYvvzdFiVj3YYC6z70K/3iyZods5neQmqsygmtw07Ie9WdkuIdEfM50gZvvNcQCDyOs4qfjGigYfsDZm3o3kzDXGGykZfCa40Gg96u4u+4c2bU0lP7Vz91d1jh7BuLX7nl5nAnIxwJhif/M9/apub8fPaj1Pflqevu1q77SUwhKS3pPQv9FmLnNmEK2A432E5oyu9VQDE32npn1Daka1V+5S72N5oJwTJqXXaty45tDyks25dzS/9t1kAhl0hWsD+Lzw0ZRt3YtA83Js35iJ9OkTnVNHwtbDk/GlM/BlDyxEALdRQGMRf2fyP0ZE3Xfj8AQCOfW7QUKYC4TuABgXgrcibQBjLequ'

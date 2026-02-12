@@ -39,7 +39,7 @@ function createRegisterBody(options) {
     platformId: platformId,
     passwd: passwd,
     registerType: 0,
-    geeToken: "disabled",
+    geeToken: "enabled",
     time: Math.floor(Date.now() / 1000)
   };
 }

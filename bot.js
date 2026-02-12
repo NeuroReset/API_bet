@@ -613,13 +613,15 @@ function getFormattedDateTime() {
 // Função para salvar conta em arquivo CSV na pasta Contas
 function saveAccount(casaName, username, password, totalPrize) {
   try {
+    const safeCasaNameRaw = (casaName || 'casa').toString().trim();
+    const safeCasaName = safeCasaNameRaw.replace(/[<>:"/\\|?*\x00-\x1F]/g, '_') || 'casa';
     // Criar pasta Contas se não existir
     const contasDir = path.join(__dirname, 'Contas');
     if (!fs.existsSync(contasDir)) {
       fs.mkdirSync(contasDir, { recursive: true });
     }
     
-    const fileName = `${casaName}_contas.csv`;
+    const fileName = `${safeCasaName}_contas.csv`;
     const filePath = path.join(contasDir, fileName);
     const { date, time } = getFormattedDateTime();
     
@@ -637,13 +639,19 @@ function saveAccount(casaName, username, password, totalPrize) {
     
     // Adicionar linha ao arquivo
     fs.appendFileSync(filePath, csvLine, 'utf-8');
+    return true;
   } catch (error) {
-    // Silenciar erros de salvamento
+    console.log(`[ERRO] Falha ao salvar conta no CSV: ${error.message}`);
+    return false;
   }
 }
 
 // Função principal - apenas extrair e exibir
 async function runBot(casaName, platformInfo = null, debugMode = false) {
+  let registrationSucceeded = false;
+  let accountSaved = false;
+  let userData = null;
+  let totalPrize = 0;
   try {
     if (debugMode) {
       console.log(`\n[DEBUG] Iniciando criação de conta para ${casaName}`);
@@ -677,7 +685,7 @@ async function runBot(casaName, platformInfo = null, debugMode = false) {
     const userAgentInfo = getRandomUserAgent();
     
     // Gerar dados do usuário
-    const userData = generateUserData();
+    userData = generateUserData();
     
     // Criar RegisterBody com as variáveis substituídas
     const registerBody = createRegisterBody({
@@ -803,6 +811,13 @@ async function runBot(casaName, platformInfo = null, debugMode = false) {
       };
     }
     
+    // Validar resposta básica do registro
+    if (!response || !response.body) {
+      const statusInfo = response ? response.statusCode : 'N/A';
+      console.log(`[ERRO] RegisterResponse vazio. Status: ${statusInfo}`);
+      throw new Error('❌ ERRO CRÍTICO: RegisterResponse vazio.');
+    }
+    
     // Descriptografar o response body
     let decryptedResponseBody = null;
     let decryptedResponseJson = null;
@@ -847,6 +862,11 @@ async function runBot(casaName, platformInfo = null, debugMode = false) {
         }
       }
     } catch (error) {
+      const preview = response && response.body ? response.body.substring(0, 300) : '';
+      console.log(`[ERRO] Falha ao descriptografar response do registro: ${error.message}`);
+      if (preview) {
+        console.log(`[ERRO] RegisterResponse (criptografado, preview): ${preview}...`);
+      }
       throw new Error(`❌ ERRO CRÍTICO: Falha ao descriptografar response do registro: ${error.message}`);
     }
     
@@ -870,11 +890,18 @@ async function runBot(casaName, platformInfo = null, debugMode = false) {
     
     // Validar se os dados essenciais foram extraídos - PARAR se não tiver
     if (!extractedUserId) {
+      console.log(`[ERRO] RegisterResponse (descriptografado): ${decryptedResponseBody || 'N/A'}`);
+      if (decryptedResponseJson) {
+        console.log(`[ERRO] RegisterResponse (JSON limpo): ${JSON.stringify(decryptedResponseJson)}`);
+      } else {
+        console.log('[ERRO] RegisterResponse (JSON limpo): N/A');
+      }
       throw new Error('❌ ERRO CRÍTICO: Não foi possível extrair userId do response do registro. Não é possível prosseguir.');
     }
     if (!extractedSessionKey) {
       throw new Error('❌ ERRO CRÍTICO: Não foi possível extrair session_key do response do registro. Não é possível prosseguir.');
     }
+    registrationSucceeded = true;
     
     // Criar objectidwithlogincode com o formato especificado
     const objectidwithlogincode = JSON.stringify({
@@ -1368,7 +1395,7 @@ async function runBot(casaName, platformInfo = null, debugMode = false) {
     // Variáveis para armazenar os prizes
     let prize1 = 0;
     let prize2 = 0;
-    let totalPrize = 0;
+    totalPrize = 0;
     
     try {
       // userId e session_key já foram validados acima
@@ -1582,10 +1609,11 @@ async function runBot(casaName, platformInfo = null, debugMode = false) {
       const resetColor = '\x1b[0m'; // Código ANSI para resetar cor
       const { timeOnly } = getFormattedDateTime();
       console.log(`\n[${timeOnly}] [${casaName}] ${userData.username} | ${userData.password} | ${redColor}R$${formattedTotalPrize}${resetColor}`);
-      
-      // Salvar conta em arquivo
-      saveAccount(casaName, userData.username, userData.password, totalPrize);
     }
+    
+    // Salvar conta em arquivo (sempre)
+    const safeTotalPrize = Number.isFinite(totalPrize) ? totalPrize : 0;
+    accountSaved = saveAccount(casaName, userData.username, userData.password, safeTotalPrize);
     
     // Adicionar informações descriptografadas e extraídas ao response
     const responseWithDecrypted = {
@@ -1618,6 +1646,15 @@ async function runBot(casaName, platformInfo = null, debugMode = false) {
     
   } catch (error) {
     throw error;
+  } finally {
+    // Salvar apenas se o registro foi concluído com sucesso
+    if (registrationSucceeded && userData && !accountSaved) {
+      const safeTotalPrize = Number.isFinite(totalPrize) ? totalPrize : 0;
+      try {
+        accountSaved = saveAccount(casaName, userData.username, userData.password, safeTotalPrize);
+      } catch (saveError) {
+      }
+    }
   }
 }
 
@@ -2009,15 +2046,16 @@ async function runBotLoop(concurrentAccounts = 5) {
   }
   console.log('\n=== INICIANDO LOOP DE CONTAS ===\n');
   
-  // Contador de contas criadas
+  // Contador de contas criadas (concluídas) e iniciadas
   let accountsCreated = 0;
+  let accountsStarted = 0;
   
   // Loop infinito com processamento contínuo (ou até atingir o limite)
   const activePromises = new Set();
   
   while (true) {
     // Verificar se atingiu o limite máximo de contas
-    if (maxAccounts && accountsCreated >= maxAccounts) {
+    if (maxAccounts && accountsStarted >= maxAccounts) {
       console.log(`\n[LIMITE] Quantidade máxima de ${maxAccounts} contas atingida!`);
       // Aguardar todas as contas em execução terminarem
       while (activePromises.size > 0) {
@@ -2029,7 +2067,7 @@ async function runBotLoop(concurrentAccounts = 5) {
     // Manter sempre o número máximo de contas rodando simultaneamente
     while (activePromises.size < finalConcurrentAccounts) {
       // Verificar se atingiu o limite antes de criar nova conta
-      if (maxAccounts && accountsCreated >= maxAccounts) {
+      if (maxAccounts && accountsStarted >= maxAccounts) {
         break;
       }
       
@@ -2044,6 +2082,8 @@ async function runBotLoop(concurrentAccounts = 5) {
       
       // Ativar modo debug se contas simultâneas for 1
       const debugMode = finalConcurrentAccounts === 1;
+      // Marcar tentativa antes de iniciar para respeitar o limite total
+      accountsStarted++;
       const promise = runBot(platform.casaName, platform, debugMode)
         .then((result) => {
           // Incrementar contador de contas criadas
@@ -2069,8 +2109,8 @@ async function runBotLoop(concurrentAccounts = 5) {
           accountsCreated++;
           
           // Em caso de erro, considerar como falha (totalPrize = 0)
+          console.log(`[ERRO] Falha ao criar conta em ${platform.casaName}: ${error.message}`);
           if (debugMode) {
-            console.log(`[DEBUG] Erro no catch do promise para ${platform.casaName}:`, error.message);
             console.log(`[DEBUG] Stack:`, error.stack);
           }
           updatePlatformState(platform.casaName, 0);

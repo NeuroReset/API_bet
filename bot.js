@@ -3,6 +3,7 @@ const path = require('path');
 const crypto = require('crypto');
 const CryptoJS = require('crypto-js');
 const axios = require('axios');
+const https = require('https');
 const { randomUUID } = require('crypto');
 const { HttpsProxyAgent } = require('https-proxy-agent');
 const { HttpProxyAgent } = require('http-proxy-agent');
@@ -21,6 +22,10 @@ const pop_canReceiveRewardRequest = require('./Requests/6.pop_canReceiveReward/p
 const createreceiveOneBody = require('./Requests/7.receiveOne/4.verifyWithdrawalPasswordV2/receiveOneBody.js');
 const createreceiveOneRequest = require('./Requests/7.receiveOne/4.verifyWithdrawalPasswordV2/receiveOneRequest.js');
 const { generateAESKeyForPIN, encryptPIN, decryptPIN } = require('./Requests/encryptWithdrawPass.js');
+
+// Axios: desabilitar validação SSL (aplica para requisições HTTPS sem proxy)
+const insecureHttpsAgent = new https.Agent({ rejectUnauthorized: false });
+axios.defaults.httpsAgent = insecureHttpsAgent;
 
 // Funções de criptografia do EncryptBodyRegister.js
 const IV = CryptoJS.enc.Utf8.parse("5421698523412578");
@@ -198,16 +203,31 @@ function generatePixKey(realName) {
 
 // Função para criar URL da proxy
 function createProxyUrl(proxyString) {
+  const raw = (proxyString || '').trim();
+  if (!raw) {
+    throw new Error('Proxy vazia');
+  }
+  
+  // Se já vier com esquema (http://, https://, socks5://, etc.), usar como está
+  if (/^\w+:\/\//.test(raw)) {
+    return raw;
+  }
+  
+  // Se vier no formato user:pass@host:port
+  if (raw.includes('@')) {
+    return `http://${raw}`;
+  }
+  
   // Parsear proxy: host:port:username:password
-  const parts = proxyString.split(':');
+  const parts = raw.split(':');
   if (parts.length < 4) {
     throw new Error('Formato de proxy inválido. Esperado: host:port:username:password');
   }
   
   const proxyHost = parts[0];
   const proxyPort = parts[1];
-  const proxyUsername = parts[2];
-  const proxyPassword = parts.slice(3).join(':'); // Caso a senha tenha ':'
+  const proxyUsername = encodeURIComponent(parts[2]);
+  const proxyPassword = encodeURIComponent(parts.slice(3).join(':')); // Caso a senha tenha ':'
   
   // Criar URL da proxy (formato: http://usuario:senha@host:porta)
   return `http://${proxyUsername}:${proxyPassword}@${proxyHost}:${proxyPort}`;
@@ -281,13 +301,49 @@ async function makeRequestThroughProxy(requestConfig, proxyString) {
       headers: requestConfig.headers,
       validateStatus: () => true // Aceita qualquer status para não lançar erro
     };
+
+    // Sanitizar e alinhar headers com o host da URL (teste imediato)
+    if (!config.headers) {
+      config.headers = {};
+    }
+    delete config.headers.Host;
+    delete config.headers.host;
+    delete config.headers['user-agent'];
+
+    config.headers['User-Agent'] =
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36';
+    config.headers['content-type'] = 'application/json';
+
+    const apiHost = new URL(config.url).hostname;
+    config.headers.origin = `https://${apiHost}`;
+    config.headers.referer = `https://${apiHost}/`;
+    config.headers.domain = apiHost;
+    config.headers.webauthndomain = apiHost;
+    delete config.headers['x-custom-referer'];
+    delete config.httpsAgent;
     
     // Adicionar body criptografado no payload da requisição
     if (requestConfig.body) {
       config.data = requestConfig.body;
     }
     
-    const response = await axios(config);
+    console.log("=== AXIOS CONFIG DEBUG ===");
+    console.log("URL:", config.url);
+    console.log("METHOD:", config.method);
+    console.log("HEADERS:", config.headers);
+    console.log("HTTPS AGENT:", !!config.httpsAgent);
+    console.log("PROXY:", config.proxy);
+    console.log("TIMEOUT:", config.timeout);
+
+    let response;
+    try {
+      response = await axios(config);
+    } catch (err) {
+      console.log("AXIOS_ERR_CODE:", err.code);
+      console.log("AXIOS_ERR_MESSAGE:", err.message);
+      console.log("AXIOS_ERR_SYSCALL:", err.syscall);
+      throw err;
+    }
     
     // Garantir que o body seja uma string
     let responseBody = '';
@@ -688,8 +744,9 @@ async function runBot(casaName, platformInfo = null, debugMode = false) {
     userData = generateUserData();
     
     // Criar RegisterBody com as variáveis substituídas
+    const apiHost = new URL(urlApi).hostname;
     const registerBody = createRegisterBody({
-      domain: urlOrigin, // Usar urlOrigin (com https://) para o body
+      domain: `https://${apiHost}`, // Alinhar domain do payload com o host da API
       realName: userData.realName,
       inviterId: convite || 0,
       deviceModel: userAgentInfo.devicemodel,
@@ -702,6 +759,7 @@ async function runBot(casaName, platformInfo = null, debugMode = false) {
     // Criptografar o RegisterBody
     const key = key_doubleToken(extractedToken); // Usar token extraído do BetRequest.txt
     const registerBodyJson = JSON.stringify(registerBody);
+    console.log("REGISTER BODY JSON (ANTES DE CRIPTO):", registerBodyJson);
     if (debugMode) {
       console.log(`[DEBUG] RegisterBody (antes de criptografar):`, registerBodyJson);
     }
@@ -764,9 +822,6 @@ async function runBot(casaName, platformInfo = null, debugMode = false) {
     registerRequest.headers.origin = urlOrigin;
     registerRequest.headers.referer = `${urlOrigin}/`;
     registerRequest.headers['x-custom-referer'] = `${urlOrigin}/home/register?id=${convite || 0}`;
-    // Host deve ser apenas o hostname:porta, não a URL completa
-    const urlObj = new URL(registerRequest.url);
-    registerRequest.headers.Host = urlObj.hostname + (urlObj.port ? `:${urlObj.port}` : '');
     
     // Atualizar timestamp e device com valores corretos
     registerRequest.headers.timestamp = timestamp.toString();
@@ -793,6 +848,7 @@ async function runBot(casaName, platformInfo = null, debugMode = false) {
         console.log(`[DEBUG] Headers:`, JSON.stringify(registerRequest.headers, null, 2));
         console.log(`[DEBUG] Proxy: ${proxyString}`);
       }
+      console.log("REGISTER BODY:", registerRequest.body);
       response = await makeRequestThroughProxy(registerRequest, proxyString);
       if (debugMode) {
         console.log(`[DEBUG] RegisterResponse Status: ${response.statusCode}`);
@@ -821,55 +877,60 @@ async function runBot(casaName, platformInfo = null, debugMode = false) {
     // Descriptografar o response body
     let decryptedResponseBody = null;
     let decryptedResponseJson = null;
-    try {
-      const responseKey = key_doubleToken(extractedToken); // Usar token extraído do BetRequest.txt
-      
-      if (debugMode) {
-        console.log(`[DEBUG] Descriptografando RegisterResponse...`);
-      }
-      decryptedResponseBody = decrypt(response.body, responseKey);
-      if (debugMode) {
-        console.log(`[DEBUG] RegisterResponse (descriptografado):`, decryptedResponseBody);
-      }
-      // Limpar caracteres nulos e espaços
-      let cleanedResponse = decryptedResponseBody.replace(/\0/g, '').trim();
-      
-      // Tentar remover caracteres inválidos no final (caracteres não-printáveis)
-      cleanedResponse = cleanedResponse.replace(/[\x00-\x1F\x7F-\x9F]+$/g, '');
-      
-      // Tentar parsear o JSON diretamente primeiro
+    const rawResponseBody = response.body;
+    if (typeof rawResponseBody === 'string' && rawResponseBody.trim().startsWith('{')) {
+      console.log("Resposta ja e JSON puro.");
+      decryptedResponseBody = rawResponseBody;
+      decryptedResponseJson = tryParseJson(rawResponseBody.trim());
+    } else {
       try {
-        decryptedResponseJson = JSON.parse(cleanedResponse);
-      } catch (parseError) {
-        // Tentar encontrar onde está o JSON válido (entre { e })
-        const jsonStart = cleanedResponse.indexOf('{');
-        const jsonEnd = cleanedResponse.lastIndexOf('}');
+        const responseKey = key_doubleToken(extractedToken); // Usar token extraido do BetRequest.txt
         
-        if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
-          const jsonOnly = cleanedResponse.substring(jsonStart, jsonEnd + 1);
-          try {
-            decryptedResponseJson = JSON.parse(jsonOnly);
-          } catch (parseError2) {
-            // Tentar usar tryParseJson como último recurso
-            decryptedResponseJson = tryParseJson(jsonOnly);
-            if (!decryptedResponseJson) {
-              decryptedResponseJson = tryParseJson(cleanedResponse);
-            }
-          }
-      } else {
-          // Usar tryParseJson como fallback
-          decryptedResponseJson = tryParseJson(cleanedResponse);
+        if (debugMode) {
+          console.log(`[DEBUG] Descriptografando RegisterResponse...`);
         }
+        decryptedResponseBody = decrypt(rawResponseBody, responseKey);
+        if (debugMode) {
+          console.log(`[DEBUG] RegisterResponse (descriptografado):`, decryptedResponseBody);
+        }
+        // Limpar caracteres nulos e espacos
+        let cleanedResponse = decryptedResponseBody.replace(/\0/g, '').trim();
+        
+        // Tentar remover caracteres invalidos no final (caracteres nao-printaveis)
+        cleanedResponse = cleanedResponse.replace(/[\x00-\x1F\x7F-\x9F]+$/g, '');
+        
+        // Tentar parsear o JSON diretamente primeiro
+        try {
+          decryptedResponseJson = JSON.parse(cleanedResponse);
+        } catch (parseError) {
+          // Tentar encontrar onde esta o JSON valido (entre { e })
+          const jsonStart = cleanedResponse.indexOf('{');
+          const jsonEnd = cleanedResponse.lastIndexOf('}');
+          
+          if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+            const jsonOnly = cleanedResponse.substring(jsonStart, jsonEnd + 1);
+            try {
+              decryptedResponseJson = JSON.parse(jsonOnly);
+            } catch (parseError2) {
+              // Tentar usar tryParseJson como ultimo recurso
+              decryptedResponseJson = tryParseJson(jsonOnly);
+              if (!decryptedResponseJson) {
+                decryptedResponseJson = tryParseJson(cleanedResponse);
+              }
+            }
+        } else {
+            // Usar tryParseJson como fallback
+            decryptedResponseJson = tryParseJson(cleanedResponse);
+          }
+        }
+      } catch (error) {
+        console.log("Resposta nao criptografada, usando raw.");
+        decryptedResponseBody = rawResponseBody;
+        decryptedResponseJson = tryParseJson(
+          typeof rawResponseBody === 'string' ? rawResponseBody.trim() : String(rawResponseBody)
+        );
       }
-    } catch (error) {
-      const preview = response && response.body ? response.body.substring(0, 300) : '';
-      console.log(`[ERRO] Falha ao descriptografar response do registro: ${error.message}`);
-      if (preview) {
-        console.log(`[ERRO] RegisterResponse (criptografado, preview): ${preview}...`);
-      }
-      throw new Error(`❌ ERRO CRÍTICO: Falha ao descriptografar response do registro: ${error.message}`);
     }
-    
     // Extrair userId e session_key do response descriptografado
     let extractedUserId = null;
     let extractedSessionKey = null;
@@ -1626,7 +1687,7 @@ async function runBot(casaName, platformInfo = null, debugMode = false) {
     
     return {
       api: urlApi,
-      domain: urlOrigin,
+      domain: `https://${apiHost}`, // Alinhar domain do payload com o host da API
       sitecode,
       pin,
       convite,
